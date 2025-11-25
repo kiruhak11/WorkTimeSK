@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Константы
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://web:3000')
-SECRET_CODE = os.getenv('SECRET_REGISTRATION_CODE', '1234')
+SECRET_CODE = '1517'  # Секретный код регистрации
 
 # Состояния для ConversationHandler
 FIRST_NAME, LAST_NAME, POSITION, SECRET = range(4)

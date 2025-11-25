@@ -5,10 +5,9 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
     const { telegramId, firstName, lastName, position, secretCode } = body
     
-    const config = useRuntimeConfig()
-    
-    // Проверка секретного кода
-    if (secretCode !== config.secretRegistrationCode) {
+    // Проверка секретного кода (хардкод в коде)
+    const SECRET_REGISTRATION_CODE = '1517'
+    if (secretCode !== SECRET_REGISTRATION_CODE) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Неверный секретный код'

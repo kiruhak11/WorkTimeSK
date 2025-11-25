@@ -1,12 +1,19 @@
 <template>
   <div class="admin-page">
-    <header class="header">
+    <!-- Модальное окно авторизации -->
+    <AuthModal 
+      :show="!isAuthenticated" 
+      @success="handleAuthSuccess"
+      @close="handleAuthClose"
+    />
+    
+    <header class="header" v-if="isAuthenticated">
       <div class="container">
         <h1>Система управления расписанием</h1>
       </div>
     </header>
 
-    <div class="container">
+    <div class="container" v-if="isAuthenticated">
       <!-- Выбор недели -->
       <div class="card week-selector">
         <h3>Выберите неделю</h3>
@@ -28,20 +35,53 @@
         @submit="loadSchedules"
       />
 
-      <!-- Таблица расписаний -->
+      <!-- Фильтр по должностям -->
+      <div class="card position-filter" v-if="uniquePositions.length > 0">
+        <h3>Фильтр по должностям</h3>
+        <div class="position-buttons">
+          <button
+            v-for="position in uniquePositions"
+            :key="position"
+            class="position-btn"
+            :class="{ active: selectedPosition === position }"
+            @click="selectedPosition = position"
+          >
+            {{ position }}
+          </button>
+          <button
+            class="position-btn"
+            :class="{ active: selectedPosition === 'all' }"
+            @click="selectedPosition = 'all'"
+          >
+            Все
+          </button>
+        </div>
+      </div>
+
+      <!-- Таблицы расписаний по должностям -->
       <div v-if="loading" class="loading"></div>
       <div v-else-if="error" class="error">{{ error }}</div>
-      <ScheduleTable 
-        v-else-if="schedules.length > 0"
-        :schedules="schedules"
-        :week-start="weekStart"
-        :week-end="weekEnd"
-        @refresh="loadSchedules"
-        @confirm="handleConfirm"
-      />
-      <div v-else class="card">
-        <p>Нет расписаний на выбранную неделю. Добавьте расписания через форму выше.</p>
-      </div>
+      <template v-else>
+        <div v-for="position in filteredPositions" :key="position" class="position-schedule-section">
+          <div class="card position-header">
+            <h2>{{ position }}</h2>
+          </div>
+          <ScheduleTable 
+            v-if="getSchedulesByPosition(position).length > 0"
+            :schedules="getSchedulesByPosition(position)"
+            :week-start="weekStart"
+            :week-end="weekEnd"
+            @refresh="loadSchedules"
+            @confirm="handleConfirm"
+          />
+          <div v-else class="card">
+            <p>Нет расписаний для должности "{{ position }}" на выбранную неделю.</p>
+          </div>
+        </div>
+        <div v-if="filteredSchedules.length === 0" class="card">
+          <p>Нет расписаний на выбранную неделю. Добавьте расписания через форму выше.</p>
+        </div>
+      </template>
 
       <!-- Список сотрудников -->
       <div class="card users-list">
@@ -74,7 +114,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import AuthModal from '~/components/AuthModal.vue'
 
 interface User {
   id: string
@@ -104,6 +145,8 @@ const error = ref('')
 const deletingUserId = ref<string | null>(null)
 const availableWeeks = ref<Array<{ weekStart: Date; weekEnd: Date; label: string }>>([])
 const selectedWeekIndex = ref(0)
+const selectedPosition = ref<string>('all')
+const isAuthenticated = ref(false)
 
 const weekStart = computed(() => {
   if (availableWeeks.value.length > 0 && selectedWeekIndex.value >= 0) {
@@ -128,6 +171,91 @@ const weekEnd = computed(() => {
   sunday.setDate(monday.getDate() + 6)
   return sunday
 })
+
+// Уникальные должности из расписаний
+const uniquePositions = computed(() => {
+  const positions = new Set(schedules.value.map(s => s.user.position))
+  return Array.from(positions).sort()
+})
+
+// Фильтрованные расписания
+const filteredSchedules = computed(() => {
+  if (selectedPosition.value === 'all') {
+    return schedules.value
+  }
+  return schedules.value.filter(s => s.user.position === selectedPosition.value)
+})
+
+// Должности для отображения
+const filteredPositions = computed(() => {
+  if (selectedPosition.value === 'all') {
+    return uniquePositions.value
+  }
+  return [selectedPosition.value]
+})
+
+// Функция для получения расписаний по должности
+function getSchedulesByPosition(position: string): Schedule[] {
+  return schedules.value.filter(s => s.user.position === position)
+}
+
+// Проверка авторизации
+function checkAuth() {
+  // Проверяем sessionStorage
+  if (typeof window !== 'undefined') {
+    const sessionAuth = sessionStorage.getItem('auth')
+    if (sessionAuth) {
+      try {
+        const authData = JSON.parse(sessionAuth)
+        if (authData.authenticated) {
+          isAuthenticated.value = true
+          return
+        }
+      } catch (e) {
+        // Игнорируем ошибки парсинга
+      }
+    }
+    
+    // Проверяем localStorage
+    const localAuth = localStorage.getItem('auth')
+    const authExpiry = localStorage.getItem('authExpiry')
+    
+    if (localAuth && authExpiry) {
+      try {
+        const authData = JSON.parse(localAuth)
+        const expiry = parseInt(authExpiry)
+        
+        if (authData.authenticated && Date.now() < expiry) {
+          isAuthenticated.value = true
+          return
+        } else {
+          // Срок истек, удаляем
+          localStorage.removeItem('auth')
+          localStorage.removeItem('authExpiry')
+        }
+      } catch (e) {
+        // Игнорируем ошибки парсинга
+      }
+    }
+  }
+  
+  isAuthenticated.value = false
+}
+
+function handleAuthSuccess() {
+  isAuthenticated.value = true
+  // Загружаем данные после успешной авторизации
+  loadUsers()
+  loadWeeks()
+  loadSchedules()
+}
+
+function handleAuthClose() {
+  // Не позволяем закрыть модальное окно без авторизации
+  if (!isAuthenticated.value) {
+    checkAuth()
+  }
+}
 
 async function loadWeeks() {
   try {
@@ -247,9 +375,17 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
 }
 
 onMounted(async () => {
-  await loadUsers()
-  await loadWeeks()
-  await loadSchedules()
+  checkAuth()
+  if (isAuthenticated.value) {
+    await loadUsers()
+    await loadWeeks()
+    await loadSchedules()
+  }
+})
+
+// Следим за изменением выбранной должности
+watch(selectedPosition, () => {
+  // Можно добавить дополнительную логику при изменении фильтра
 })
 </script>
 
@@ -319,6 +455,69 @@ onMounted(async () => {
     font-weight: 600;
     color: $color-text-primary;
     font-size: $font-size-base;
+  }
+}
+
+.position-filter {
+  margin-bottom: $spacing-xl;
+  
+  h3 {
+    margin-bottom: $spacing-lg;
+    font-size: $font-size-xl;
+    font-weight: 700;
+    background: $gradient-primary;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .position-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-md;
+    
+    .position-btn {
+      padding: $spacing-md $spacing-lg;
+      border: 2px solid $color-border;
+      border-radius: $radius-md;
+      background: $color-bg-primary;
+      color: $color-text-primary;
+      font-weight: 600;
+      font-size: $font-size-base;
+      cursor: pointer;
+      transition: $transition-base;
+      
+      &:hover {
+        border-color: $color-primary-light;
+        transform: translateY(-2px);
+        box-shadow: $shadow-md;
+      }
+      
+      &.active {
+        background: $gradient-primary;
+        color: $color-text-light;
+        border-color: transparent;
+        box-shadow: $shadow-lg;
+      }
+    }
+  }
+}
+
+.position-schedule-section {
+  margin-bottom: $spacing-2xl;
+  
+  .position-header {
+    margin-bottom: $spacing-lg;
+    
+    h2 {
+      font-size: $font-size-2xl;
+      font-weight: 700;
+      background: $gradient-primary;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin: 0;
+    }
   }
 }
 
