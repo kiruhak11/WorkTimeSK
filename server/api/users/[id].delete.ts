@@ -1,0 +1,90 @@
+import prisma from '../../utils/prisma'
+
+// Функция отправки уведомления в Telegram
+async function sendTelegramNotification(telegramId: string, message: string) {
+  try {
+    const config = useRuntimeConfig()
+    const token = config.telegramBotToken
+    
+    if (!token) {
+      console.error('TELEGRAM_BOT_TOKEN not configured')
+      return false
+    }
+    
+    const url = `https://api.telegram.org/bot${token}/sendMessage`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text: message
+      })
+    })
+    
+    return response.ok
+  } catch (error) {
+    console.error('Error sending telegram notification:', error)
+    return false
+  }
+}
+
+export default defineEventHandler(async (event) => {
+  try {
+    const id = getRouterParam(event, 'id')
+    
+    if (!id) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'ID пользователя не указан'
+      })
+    }
+    
+    // Получаем пользователя перед удалением
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        telegramId: true
+      }
+    })
+    
+    if (!user) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Пользователь не найден'
+      })
+    }
+    
+    // Удаляем пользователя (каскадное удаление расписаний)
+    await prisma.user.delete({
+      where: { id }
+    })
+    
+    // Отправляем сообщение в Telegram
+    const message = `👋 Добрый день, ${user.firstName} ${user.lastName}!\n\n` +
+      `К сожалению, ваш аккаунт был удален из системы управления расписанием.\n\n` +
+      `Спасибо за работу! Желаем вам успехов в дальнейшем!`
+    
+    await sendTelegramNotification(user.telegramId, message)
+    
+    return {
+      success: true,
+      message: 'Пользователь успешно удален'
+    }
+  } catch (error: any) {
+    console.error('Delete user error:', error)
+    throw createError({
+      statusCode: error.statusCode || 500,
+      statusMessage: error.statusMessage || 'Ошибка при удалении пользователя'
+    })
+  }
+})
+
+
+
+
+

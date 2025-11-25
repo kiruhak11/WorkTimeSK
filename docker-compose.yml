@@ -1,0 +1,77 @@
+services:
+  # База данных PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: worktimesk-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: worktimesk
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - worktimesk-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Веб-приложение Nuxt 3
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: worktimesk-web
+    restart: unless-stopped
+    ports:
+      - "3025:3000"  # Проброс порта для Nginx reverse proxy
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/worktimesk?schema=public"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      SECRET_REGISTRATION_CODE: "${SECRET_REGISTRATION_CODE:-1234}"
+      API_BASE_URL: "http://web:3000"
+      NODE_ENV: production
+      HOST: "0.0.0.0"  # Слушать на всех интерфейсах для работы с Nginx
+      PORT: "3000"     # Порт внутри контейнера
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - worktimesk-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/users', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Telegram бот
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: worktimesk-bot
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      API_BASE_URL: "http://web:3000"
+      SECRET_REGISTRATION_CODE: "${SECRET_REGISTRATION_CODE:-1234}"
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - worktimesk-network
+
+networks:
+  worktimesk-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+
+

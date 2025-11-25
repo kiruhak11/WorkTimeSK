@@ -1,0 +1,29 @@
+{
+  "name": "WorkTimeSK",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.0",
+    "nuxt": "^4.2.1",
+    "prisma": "^5.19.0",
+    "sass": "^1.94.2",
+    "vue": "^3.5.24",
+    "vue-router": "^4.6.3",
+    "xlsx": "^0.18.5"
+  }
+}
