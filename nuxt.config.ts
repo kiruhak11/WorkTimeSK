@@ -34,5 +34,9 @@ export default defineNuxtConfig({
     // Настройки для работы с Nginx reverse proxy
     // Приложение будет слушать на 0.0.0.0:3000 внутри контейнера
     // Nginx будет проксировать с порта 3025 на порт 3000 контейнера
+    // Переменные окружения доступны напрямую в серверных роутах
+    runtimeConfig: {
+      telegramBotToken: process.env.TELEGRAM_BOT_TOKEN
+    }
   }
 })
