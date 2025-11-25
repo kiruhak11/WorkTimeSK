@@ -1,5 +1,6 @@
 import os
 import logging
+import sys
 import requests
 from typing import Dict
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -11,6 +12,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from telegram.error import Conflict, TimedOut, NetworkError, RetryAfter
 from dotenv import load_dotenv
 
 # Загрузка переменных окружения
@@ -214,14 +216,35 @@ def send_schedule_notification(telegram_id: str, schedule_data: Dict) -> bool:
         return False
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик ошибок"""
+    logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
+    
+    if isinstance(context.error, Conflict):
+        logger.error(
+            "Конфликт: другой экземпляр бота уже запущен. "
+            "Убедитесь, что запущен только один экземпляр бота."
+        )
+        # Бот будет пытаться переподключиться автоматически
+    elif isinstance(context.error, TimedOut):
+        logger.warning("Таймаут при запросе к Telegram API")
+    elif isinstance(context.error, NetworkError):
+        logger.warning("Ошибка сети при подключении к Telegram API")
+    elif isinstance(context.error, RetryAfter):
+        logger.warning(f"Превышен лимит запросов. Нужно подождать {context.error.retry_after} секунд")
+
+
 def main() -> None:
     """Запуск бота"""
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not found!")
-        return
+        sys.exit(1)
     
     # Создаем приложение
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    # Добавляем обработчик ошибок
+    application.add_error_handler(error_handler)
     
     # Создаем ConversationHandler для регистрации
     conv_handler = ConversationHandler(
@@ -240,8 +263,26 @@ def main() -> None:
     application.add_handler(CommandHandler('help', help_command))
     
     # Запускаем бота
-    logger.info("Bot started!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Bot started! Polling...")
+    logger.info("Убедитесь, что запущен только один экземпляр бота!")
+    try:
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,  # Игнорировать старые обновления при запуске
+            close_loop=False
+        )
+    except Conflict as e:
+        logger.error(
+            f"КРИТИЧЕСКАЯ ОШИБКА: Конфликт - другой экземпляр бота уже запущен!\n"
+            f"Остановите другие экземпляры бота перед запуском нового.\n"
+            f"Ошибка: {e}"
+        )
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logger.info("Bot остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка при запуске бота: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
