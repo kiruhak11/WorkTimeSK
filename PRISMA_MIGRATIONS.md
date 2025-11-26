@@ -125,3 +125,4 @@ npm run prisma:deploy        # Применение миграций (production
 npm run prisma:studio        # Открыть Prisma Studio (GUI для БД)
 ```
 
+
