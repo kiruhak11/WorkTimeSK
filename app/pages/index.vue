@@ -429,9 +429,29 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
     deletingUserId.value = userId
     error.value = ''
     
+    console.log(`[DELETE USER] Starting deletion for user ID: ${userId}`)
+    
     const response = await $fetch(`/api/users/${userId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      onRequest({ request, options }) {
+        console.log(`[DELETE USER] Request started:`, { url: request, method: options.method })
+      },
+      onRequestError({ request, error: requestError }) {
+        console.error(`[DELETE USER] Request error:`, { request, error: requestError })
+      },
+      onResponse({ response }) {
+        console.log(`[DELETE USER] Response received:`, { status: response.status, statusText: response.statusText })
+      },
+      onResponseError({ response }) {
+        console.error(`[DELETE USER] Response error:`, { 
+          status: response.status, 
+          statusText: response.statusText,
+          body: response._data 
+        })
+      }
     })
+    
+    console.log(`[DELETE USER] Success response:`, response)
     
     // Обновляем список пользователей
     await loadUsers()
@@ -441,19 +461,38 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
     
     alert('Пользователь успешно удален. Сообщение отправлено в Telegram.')
   } catch (err: any) {
-    console.error('Error deleting user:', err)
+    console.error('[DELETE USER] Full error object:', err)
+    console.error('[DELETE USER] Error type:', typeof err)
+    console.error('[DELETE USER] Error keys:', Object.keys(err))
+    console.error('[DELETE USER] Error data:', err.data)
+    console.error('[DELETE USER] Error statusCode:', err.statusCode)
+    console.error('[DELETE USER] Error statusMessage:', err.statusMessage)
+    console.error('[DELETE USER] Error message:', err.message)
+    console.error('[DELETE USER] Error response:', err.response)
     
     let errorMessage = 'Ошибка при удалении пользователя'
     
-    if (err.data) {
+    // Более детальная обработка ошибок
+    if (err.response) {
+      const responseData = err.response._data || err.response.data
+      errorMessage = responseData?.statusMessage || responseData?.message || errorMessage
+    } else if (err.data) {
       errorMessage = err.data.statusMessage || err.data.message || errorMessage
     } else if (err.statusMessage) {
       errorMessage = err.statusMessage
     } else if (err.message) {
       errorMessage = err.message
+    } else if (typeof err === 'string') {
+      errorMessage = err
     }
     
-    alert(`Ошибка: ${errorMessage}`)
+    // Если это сетевая ошибка
+    if (err.name === 'FetchError' || err.message?.includes('fetch')) {
+      errorMessage = 'Ошибка сети. Проверьте подключение к интернету и попробуйте снова.'
+    }
+    
+    console.error(`[DELETE USER] Final error message: ${errorMessage}`)
+    alert(`Ошибка: ${errorMessage}\n\nПроверьте консоль браузера для деталей.`)
   } finally {
     deletingUserId.value = null
   }

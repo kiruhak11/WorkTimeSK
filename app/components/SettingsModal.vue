@@ -192,9 +192,29 @@ async function clearDatabase() {
     error.value = ''
     successMessage.value = ''
     
+    console.log('[CLEAR DB] Starting database clear operation')
+    
     const response = await $fetch('/api/admin/clear-database', {
-      method: 'POST'
+      method: 'POST',
+      onRequest({ request, options }) {
+        console.log(`[CLEAR DB] Request started:`, { url: request, method: options.method })
+      },
+      onRequestError({ request, error: requestError }) {
+        console.error(`[CLEAR DB] Request error:`, { request, error: requestError })
+      },
+      onResponse({ response }) {
+        console.log(`[CLEAR DB] Response received:`, { status: response.status, statusText: response.statusText })
+      },
+      onResponseError({ response }) {
+        console.error(`[CLEAR DB] Response error:`, { 
+          status: response.status, 
+          statusText: response.statusText,
+          body: response._data 
+        })
+      }
     })
+    
+    console.log('[CLEAR DB] Success response:', response)
     
     successMessage.value = 'База данных успешно очищена!'
     emit('refresh')
@@ -204,19 +224,38 @@ async function clearDatabase() {
       close()
     }, 2000)
   } catch (err: any) {
-    console.error('Error clearing database:', err)
+    console.error('[CLEAR DB] Full error object:', err)
+    console.error('[CLEAR DB] Error type:', typeof err)
+    console.error('[CLEAR DB] Error keys:', Object.keys(err))
+    console.error('[CLEAR DB] Error data:', err.data)
+    console.error('[CLEAR DB] Error statusCode:', err.statusCode)
+    console.error('[CLEAR DB] Error statusMessage:', err.statusMessage)
+    console.error('[CLEAR DB] Error message:', err.message)
+    console.error('[CLEAR DB] Error response:', err.response)
     
     let errorMessage = 'Ошибка при очистке базы данных'
     
-    if (err.data) {
+    // Более детальная обработка ошибок
+    if (err.response) {
+      const responseData = err.response._data || err.response.data
+      errorMessage = responseData?.statusMessage || responseData?.message || errorMessage
+    } else if (err.data) {
       errorMessage = err.data.statusMessage || err.data.message || errorMessage
     } else if (err.statusMessage) {
       errorMessage = err.statusMessage
     } else if (err.message) {
       errorMessage = err.message
+    } else if (typeof err === 'string') {
+      errorMessage = err
     }
     
-    error.value = errorMessage
+    // Если это сетевая ошибка
+    if (err.name === 'FetchError' || err.message?.includes('fetch')) {
+      errorMessage = 'Ошибка сети. Проверьте подключение к интернету и попробуйте снова.'
+    }
+    
+    console.error(`[CLEAR DB] Final error message: ${errorMessage}`)
+    error.value = `${errorMessage}\n\nПроверьте консоль браузера для деталей.`
   } finally {
     loading.value = false
   }
