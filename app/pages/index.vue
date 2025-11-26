@@ -427,14 +427,11 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
   
   try {
     deletingUserId.value = userId
-    
-    console.log('Deleting user:', userId)
+    error.value = ''
     
     const response = await $fetch(`/api/users/${userId}`, {
       method: 'DELETE'
     })
-    
-    console.log('Delete response:', response)
     
     // Обновляем список пользователей
     await loadUsers()
@@ -445,14 +442,17 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
     alert('Пользователь успешно удален. Сообщение отправлено в Telegram.')
   } catch (err: any) {
     console.error('Error deleting user:', err)
-    console.error('Error details:', {
-      statusCode: err.statusCode,
-      statusMessage: err.statusMessage,
-      data: err.data,
-      message: err.message
-    })
     
-    const errorMessage = err.data?.statusMessage || err.statusMessage || err.message || 'Ошибка при удалении пользователя'
+    let errorMessage = 'Ошибка при удалении пользователя'
+    
+    if (err.data) {
+      errorMessage = err.data.statusMessage || err.data.message || errorMessage
+    } else if (err.statusMessage) {
+      errorMessage = err.statusMessage
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+    
     alert(`Ошибка: ${errorMessage}`)
   } finally {
     deletingUserId.value = null

@@ -43,6 +43,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     
+    console.log(`Attempting to delete user with ID: ${id}`)
+    
     // Получаем пользователя перед удалением
     const user = await prisma.user.findUnique({
       where: { id },
@@ -55,23 +57,38 @@ export default defineEventHandler(async (event) => {
     })
     
     if (!user) {
+      console.log(`User with ID ${id} not found`)
       throw createError({
         statusCode: 404,
         statusMessage: 'Пользователь не найден'
       })
     }
     
+    console.log(`Found user: ${user.firstName} ${user.lastName}, deleting...`)
+    
     // Удаляем пользователя (каскадное удаление расписаний)
     await prisma.user.delete({
       where: { id }
     })
     
-    // Отправляем сообщение в Telegram
+    console.log(`User ${id} deleted successfully`)
+    
+    // Отправляем сообщение в Telegram (не блокируем удаление, если не удалось отправить)
     const telegramMessage = `👋 Добрый день, ${user.firstName} ${user.lastName}!\n\n` +
       `К сожалению, ваш аккаунт был удален из системы управления расписанием.\n\n` +
       `Спасибо за работу! Желаем вам успехов в дальнейшем!`
     
-    await sendTelegramNotification(user.telegramId, telegramMessage, event)
+    try {
+      const telegramSent = await sendTelegramNotification(user.telegramId, telegramMessage, event)
+      if (telegramSent) {
+        console.log(`Telegram notification sent to user ${id}`)
+      } else {
+        console.warn(`Failed to send Telegram notification to user ${id}, but user was deleted`)
+      }
+    } catch (telegramError: any) {
+      console.error('Failed to send Telegram notification, but user was deleted:', telegramError)
+      // Не прерываем выполнение, если не удалось отправить сообщение
+    }
     
     return {
       success: true,
@@ -79,9 +96,15 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error: any) {
     console.error('Delete user error:', error)
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      statusCode: error.statusCode
+    })
     throw createError({
       statusCode: error.statusCode || 500,
-      statusMessage: error.statusMessage || 'Ошибка при удалении пользователя'
+      statusMessage: error.statusMessage || error.message || 'Ошибка при удалении пользователя'
     })
   }
 })

@@ -14,3 +14,4 @@ done
 npx nuxt dev --host=0.0.0.0 "${args[@]}"
 
 
+

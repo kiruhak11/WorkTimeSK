@@ -192,7 +192,7 @@ async function clearDatabase() {
     error.value = ''
     successMessage.value = ''
     
-    await $fetch('/api/admin/clear-database', {
+    const response = await $fetch('/api/admin/clear-database', {
       method: 'POST'
     })
     
@@ -205,7 +205,18 @@ async function clearDatabase() {
     }, 2000)
   } catch (err: any) {
     console.error('Error clearing database:', err)
-    error.value = err.data?.statusMessage || err.message || 'Ошибка при очистке базы данных'
+    
+    let errorMessage = 'Ошибка при очистке базы данных'
+    
+    if (err.data) {
+      errorMessage = err.data.statusMessage || err.data.message || errorMessage
+    } else if (err.statusMessage) {
+      errorMessage = err.statusMessage
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+    
+    error.value = errorMessage
   } finally {
     loading.value = false
   }
