@@ -23,7 +23,8 @@ export default defineEventHandler(async (event) => {
             telegramId: true,
             firstName: true,
             lastName: true,
-            position: true
+            position: true,
+            department: true
           }
         }
       },

@@ -1,13 +1,15 @@
 import prisma from '../../utils/prisma'
 
 // Функция отправки уведомления в Telegram
-async function sendTelegramNotification(telegramId: string, message: string) {
+async function sendTelegramNotification(telegramId: string, message: string, event?: any) {
   try {
-    const config = useRuntimeConfig()
-    const token = config.telegramBotToken
+    // Получаем токен из разных источников
+    const config = useRuntimeConfig(event)
+    let token = config.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN
     
-    if (!token) {
-      console.error('TELEGRAM_BOT_TOKEN not configured')
+    // Проверяем валидность токена
+    if (!token || token === 'YOUR_BOT_TOKEN_HERE' || token.trim() === '') {
+      console.error('TELEGRAM_BOT_TOKEN not configured or invalid')
       return false
     }
     
@@ -65,11 +67,11 @@ export default defineEventHandler(async (event) => {
     })
     
     // Отправляем сообщение в Telegram
-    const message = `👋 Добрый день, ${user.firstName} ${user.lastName}!\n\n` +
+    const telegramMessage = `👋 Добрый день, ${user.firstName} ${user.lastName}!\n\n` +
       `К сожалению, ваш аккаунт был удален из системы управления расписанием.\n\n` +
       `Спасибо за работу! Желаем вам успехов в дальнейшем!`
     
-    await sendTelegramNotification(user.telegramId, message)
+    await sendTelegramNotification(user.telegramId, telegramMessage, event)
     
     return {
       success: true,

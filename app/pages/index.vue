@@ -8,10 +8,26 @@
     />
     
     <header class="header" v-if="isAuthenticated">
-      <div class="container">
+      <div class="container header-content">
         <h1>Система управления расписанием</h1>
+        <button class="settings-btn" @click="showSettings = true" title="Настройки">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
       </div>
     </header>
+    
+    <!-- Модальное окно настроек -->
+    <SettingsModal
+      :show="showSettings"
+      :users="users"
+      :current-department="selectedDepartment"
+      @close="showSettings = false"
+      @refresh="handleSettingsRefresh"
+      @department-changed="handleDepartmentChanged"
+    />
 
     <div class="container" v-if="isAuthenticated">
       <!-- Выбор недели -->
@@ -58,49 +74,70 @@
         </div>
       </div>
 
-      <!-- Таблицы расписаний по должностям -->
+      <!-- Таблицы расписаний -->
       <div v-if="loading" class="loading"></div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <template v-else>
-        <div v-for="position in filteredPositions" :key="position" class="position-schedule-section">
-          <div class="card position-header">
-            <h2>{{ position }}</h2>
+        <!-- Если выбрано "Все" - показываем одну таблицу -->
+        <template v-if="selectedPosition === 'all'">
+          <div class="card position-header" v-if="filteredSchedules.length > 0">
+            <h2>Все расписания</h2>
           </div>
           <ScheduleTable 
-            v-if="getSchedulesByPosition(position).length > 0"
-            :schedules="getSchedulesByPosition(position)"
+            v-if="filteredSchedules.length > 0"
+            :schedules="filteredSchedules"
             :week-start="weekStart"
             :week-end="weekEnd"
             @refresh="loadSchedules"
             @confirm="handleConfirm"
           />
           <div v-else class="card">
-            <p>Нет расписаний для должности "{{ position }}" на выбранную неделю.</p>
+            <p>Нет расписаний на выбранную неделю. Добавьте расписания через форму выше.</p>
           </div>
-        </div>
-        <div v-if="filteredSchedules.length === 0" class="card">
-          <p>Нет расписаний на выбранную неделю. Добавьте расписания через форму выше.</p>
-        </div>
+        </template>
+        <!-- Если выбрана конкретная должность - показываем по должностям -->
+        <template v-else>
+          <div v-for="position in filteredPositions" :key="position" class="position-schedule-section">
+            <div class="card position-header">
+              <h2>{{ position }}</h2>
+            </div>
+            <ScheduleTable 
+              v-if="getSchedulesByPosition(position).length > 0"
+              :schedules="getSchedulesByPosition(position)"
+              :week-start="weekStart"
+              :week-end="weekEnd"
+              @refresh="loadSchedules"
+              @confirm="handleConfirm"
+            />
+            <div v-else class="card">
+              <p>Нет расписаний для должности "{{ position }}" на выбранную неделю.</p>
+            </div>
+          </div>
+          <div v-if="filteredSchedules.length === 0" class="card">
+            <p>Нет расписаний на выбранную неделю. Добавьте расписания через форму выше.</p>
+          </div>
+        </template>
       </template>
 
       <!-- Список сотрудников -->
       <div class="card users-list">
-        <h3>Зарегистрированные сотрудники ({{ users.length }})</h3>
-        <div v-if="users.length === 0" class="empty-state">
-          <p>Пока нет зарегистрированных сотрудников.</p>
+        <h3>Зарегистрированные сотрудники ({{ filteredUsers.length }})</h3>
+        <div v-if="filteredUsers.length === 0" class="empty-state">
+          <p>Пока нет зарегистрированных сотрудников в отделе "{{ selectedDepartment === 'кухня' ? 'Кухня' : 'Штат' }}".</p>
           <p>Сотрудники могут зарегистрироваться через Telegram бота.</p>
         </div>
         <div v-else class="users-grid">
-          <div v-for="user in users" :key="user.id" class="user-card">
+          <div v-for="user in filteredUsers" :key="user.id" class="user-card">
             <div class="user-info">
               <strong>{{ user.lastName }} {{ user.firstName }}</strong>
               <span class="user-position">{{ user.position }}</span>
             </div>
             <button 
               class="delete-btn" 
-              @click="deleteUser(user.id, user.firstName, user.lastName)"
+              @click.stop="deleteUser(user.id, user.firstName, user.lastName)"
               :disabled="deletingUserId === user.id"
               title="Удалить пользователя"
+              type="button"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -116,12 +153,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+import SettingsModal from '~/components/SettingsModal.vue'
 
 interface User {
   id: string
   firstName: string
   lastName: string
   position: string
+  department: string
   telegramId: string
 }
 
@@ -147,6 +186,8 @@ const availableWeeks = ref<Array<{ weekStart: Date; weekEnd: Date; label: string
 const selectedWeekIndex = ref(0)
 const selectedPosition = ref<string>('all')
 const isAuthenticated = ref(false)
+const selectedDepartment = ref<string>('')
+const showSettings = ref(false)
 
 const weekStart = computed(() => {
   if (availableWeeks.value.length > 0 && selectedWeekIndex.value >= 0) {
@@ -172,18 +213,24 @@ const weekEnd = computed(() => {
   return sunday
 })
 
-// Уникальные должности из расписаний
+// Фильтрованные расписания по отделу
+const departmentFilteredSchedules = computed(() => {
+  if (!selectedDepartment.value) return []
+  return schedules.value.filter(s => s.user.department === selectedDepartment.value)
+})
+
+// Уникальные должности из расписаний (только текущего отдела)
 const uniquePositions = computed(() => {
-  const positions = new Set(schedules.value.map(s => s.user.position))
+  const positions = new Set(departmentFilteredSchedules.value.map(s => s.user.position))
   return Array.from(positions).sort()
 })
 
-// Фильтрованные расписания
+// Фильтрованные расписания по должности
 const filteredSchedules = computed(() => {
   if (selectedPosition.value === 'all') {
-    return schedules.value
+    return departmentFilteredSchedules.value
   }
-  return schedules.value.filter(s => s.user.position === selectedPosition.value)
+  return departmentFilteredSchedules.value.filter(s => s.user.position === selectedPosition.value)
 })
 
 // Должности для отображения
@@ -194,10 +241,16 @@ const filteredPositions = computed(() => {
   return [selectedPosition.value]
 })
 
-// Функция для получения расписаний по должности
+// Функция для получения расписаний по должности (с учетом отдела)
 function getSchedulesByPosition(position: string): Schedule[] {
-  return schedules.value.filter(s => s.user.position === position)
+  return departmentFilteredSchedules.value.filter(s => s.user.position === position)
 }
+
+// Фильтрованные пользователи по отделу
+const filteredUsers = computed(() => {
+  if (!selectedDepartment.value) return []
+  return users.value.filter(u => u.department === selectedDepartment.value)
+})
 
 // Проверка авторизации
 function checkAuth() {
@@ -209,6 +262,7 @@ function checkAuth() {
         const authData = JSON.parse(sessionAuth)
         if (authData.authenticated) {
           isAuthenticated.value = true
+          selectedDepartment.value = authData.department || ''
           return
         }
       } catch (e) {
@@ -227,6 +281,7 @@ function checkAuth() {
         
         if (authData.authenticated && Date.now() < expiry) {
           isAuthenticated.value = true
+          selectedDepartment.value = authData.department || ''
           return
         } else {
           // Срок истек, удаляем
@@ -242,11 +297,26 @@ function checkAuth() {
   isAuthenticated.value = false
 }
 
-function handleAuthSuccess() {
+function handleAuthSuccess(department: string) {
   isAuthenticated.value = true
+  selectedDepartment.value = department
   // Загружаем данные после успешной авторизации
   loadUsers()
   loadWeeks()
+  loadSchedules()
+}
+
+function handleSettingsRefresh() {
+  // Обновляем данные после изменения в настройках
+  loadUsers()
+  loadSchedules()
+}
+
+function handleDepartmentChanged(department: string) {
+  // Обновляем выбранный отдел
+  selectedDepartment.value = department
+  // Обновляем данные для нового отдела
+  loadUsers()
   loadSchedules()
 }
 
@@ -358,17 +428,32 @@ async function deleteUser(userId: string, firstName: string, lastName: string) {
   try {
     deletingUserId.value = userId
     
-    await $fetch(`/api/users/${userId}`, {
+    console.log('Deleting user:', userId)
+    
+    const response = await $fetch(`/api/users/${userId}`, {
       method: 'DELETE'
     })
+    
+    console.log('Delete response:', response)
     
     // Обновляем список пользователей
     await loadUsers()
     
+    // Обновляем расписания на случай, если были связанные расписания
+    await loadSchedules()
+    
     alert('Пользователь успешно удален. Сообщение отправлено в Telegram.')
   } catch (err: any) {
     console.error('Error deleting user:', err)
-    alert(err.data?.statusMessage || 'Ошибка при удалении пользователя')
+    console.error('Error details:', {
+      statusCode: err.statusCode,
+      statusMessage: err.statusMessage,
+      data: err.data,
+      message: err.message
+    })
+    
+    const errorMessage = err.data?.statusMessage || err.statusMessage || err.message || 'Ошибка при удалении пользователя'
+    alert(`Ошибка: ${errorMessage}`)
   } finally {
     deletingUserId.value = null
   }
@@ -394,6 +479,45 @@ watch(selectedPosition, () => {
 .admin-page {
   min-height: 100vh;
   background: $color-bg-secondary;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  h1 {
+    margin: 0;
+  }
+}
+
+.settings-btn {
+  background: transparent;
+  border: 2px solid $color-primary;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  cursor: pointer;
+  color: $color-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  
+  &:hover {
+    background: $color-primary;
+    color: $color-text-light;
+    transform: rotate(90deg) scale(1.05);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+  
+  svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+  }
 }
 
 .week-selector {

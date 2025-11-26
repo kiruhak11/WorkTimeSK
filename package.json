@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev",
+    "dev": "sh scripts/dev.sh",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "prisma generate",

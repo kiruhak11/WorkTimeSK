@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
         firstName: true,
         lastName: true,
         position: true,
+        department: true,
         isAdmin: true,
         createdAt: true
       }

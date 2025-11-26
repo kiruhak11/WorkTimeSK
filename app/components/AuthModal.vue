@@ -23,9 +23,24 @@
                 class="input"
                 placeholder="Введите пароль"
                 required
-                autofocus
+                :autofocus="!showDepartmentSelect"
                 @keyup.enter="handleSubmit"
               />
+            </div>
+            
+            <div v-if="passwordValidated && showDepartmentSelect" class="form-group">
+              <label for="department">Выберите отдел</label>
+              <select
+                id="department"
+                v-model="selectedDepartment"
+                class="input"
+                required
+                @keyup.enter="handleSubmit"
+              >
+                <option value="">-- Выберите отдел --</option>
+                <option value="кухня">Кухня</option>
+                <option value="штат">Штат</option>
+              </select>
             </div>
             
             <div class="form-group checkbox-group">
@@ -45,6 +60,7 @@
             
             <button type="submit" class="btn btn-primary" :disabled="loading">
               <span v-if="loading">Проверка...</span>
+              <span v-else-if="passwordValidated && showDepartmentSelect">Продолжить</span>
               <span v-else>Войти</span>
             </button>
           </form>
@@ -65,54 +81,80 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  success: []
+  success: [department: string]
 }>()
 
 const password = ref('')
+const selectedDepartment = ref('')
 const rememberMe = ref(false)
 const loading = ref(false)
 const error = ref('')
+const passwordValidated = ref(false)
+const showDepartmentSelect = ref(false)
 
 function handleSubmit() {
-  if (!password.value) {
-    error.value = 'Введите пароль'
+  if (!passwordValidated.value) {
+    // Первый шаг - проверка пароля
+    if (!password.value) {
+      error.value = 'Введите пароль'
+      return
+    }
+    
+    loading.value = true
+    error.value = ''
+    
+    setTimeout(() => {
+      if (password.value === PASSWORD) {
+        passwordValidated.value = true
+        showDepartmentSelect.value = true
+        loading.value = false
+        error.value = ''
+      } else {
+        error.value = 'Неверный пароль'
+        loading.value = false
+      }
+    }, 300)
+    return
+  }
+  
+  // Второй шаг - выбор отдела
+  if (!selectedDepartment.value) {
+    error.value = 'Выберите отдел'
     return
   }
   
   loading.value = true
   error.value = ''
   
-  // Имитация проверки пароля
   setTimeout(() => {
-    if (password.value === PASSWORD) {
-      // Сохраняем авторизацию
-      const authData = {
-        authenticated: true,
-        timestamp: Date.now()
-      }
-      
-      if (rememberMe.value) {
-        // Сохраняем в localStorage на 30 дней
-        localStorage.setItem('auth', JSON.stringify(authData))
-        localStorage.setItem('authExpiry', String(Date.now() + 30 * 24 * 60 * 60 * 1000))
-      } else {
-        // Сохраняем в sessionStorage (только на сессию)
-        sessionStorage.setItem('auth', JSON.stringify(authData))
-      }
-      
-      emit('success')
-      close()
-    } else {
-      error.value = 'Неверный пароль'
+    // Сохраняем авторизацию
+    const authData = {
+      authenticated: true,
+      department: selectedDepartment.value,
+      timestamp: Date.now()
     }
-    loading.value = false
+    
+    if (rememberMe.value) {
+      // Сохраняем в localStorage на 30 дней
+      localStorage.setItem('auth', JSON.stringify(authData))
+      localStorage.setItem('authExpiry', String(Date.now() + 30 * 24 * 60 * 60 * 1000))
+    } else {
+      // Сохраняем в sessionStorage (только на сессию)
+      sessionStorage.setItem('auth', JSON.stringify(authData))
+    }
+    
+    emit('success', selectedDepartment.value)
+    close()
   }, 300)
 }
 
 function close() {
   password.value = ''
+  selectedDepartment.value = ''
   error.value = ''
   rememberMe.value = false
+  passwordValidated.value = false
+  showDepartmentSelect.value = false
   emit('close')
 }
 </script>

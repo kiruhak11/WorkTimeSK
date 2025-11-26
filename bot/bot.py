@@ -31,7 +31,7 @@ API_BASE_URL = os.getenv('API_BASE_URL', 'http://web:3000')
 SECRET_CODE = '1517'  # Секретный код регистрации
 
 # Состояния для ConversationHandler
-FIRST_NAME, LAST_NAME, POSITION, SECRET = range(4)
+FIRST_NAME, LAST_NAME, DEPARTMENT, POSITION, SECRET = range(5)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -63,8 +63,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Для регистрации мне нужна следующая информация:\n"
         "1. Имя\n"
         "2. Фамилия\n"
-        "3. Должность\n"
-        "4. Секретный код\n\n"
+        "3. Тип работы (Кухня или Штат)\n"
+        "4. Должность\n"
+        "5. Секретный код\n\n"
         "Давайте начнем! Напишите ваше имя:",
         reply_markup=ReplyKeyboardRemove()
     )
@@ -82,18 +83,62 @@ async def last_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Получаем фамилию"""
     context.user_data['last_name'] = update.message.text
     
-    # Предлагаем варианты должностей
+    # Предлагаем выбрать тип работы
     keyboard = [
-        ['Курьер'],
-        ['Менеджер'],
-        ['Другое']
+        ['Кухня'],
+        ['Штат']
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
     await update.message.reply_text(
-        "Хорошо! Теперь выберите вашу должность:",
+        "Хорошо! Выберите тип работы:",
         reply_markup=reply_markup
     )
+    return DEPARTMENT
+
+
+async def department(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Получаем тип работы"""
+    department_text = update.message.text.lower()
+    
+    if department_text not in ['кухня', 'штат']:
+        await update.message.reply_text(
+            "Пожалуйста, выберите 'Кухня' или 'Штат'",
+            reply_markup=ReplyKeyboardMarkup([['Кухня'], ['Штат']], one_time_keyboard=True, resize_keyboard=True)
+        )
+        return DEPARTMENT
+    
+    context.user_data['department'] = department_text
+    
+    # Если выбрана Кухня, предлагаем должности кухни
+    if department_text == 'кухня':
+        keyboard = [
+            ['Горячий отдел'],
+            ['Суши'],
+            ['Пицца'],
+            ['Су шеф'],
+            ['Шеф'],
+            ['Другое']
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text(
+            "Отлично! Теперь выберите вашу должность на кухне:",
+            reply_markup=reply_markup
+        )
+    else:
+        # Если выбран Штат, предлагаем должности штата
+        keyboard = [
+            ['Курьер'],
+            ['Менеджер'],
+            ['Администратор'],
+            ['Другое']
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text(
+            "Отлично! Теперь выберите вашу должность:",
+            reply_markup=reply_markup
+        )
+    
     return POSITION
 
 
@@ -137,6 +182,7 @@ async def secret(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 'telegramId': str(user.id),
                 'firstName': context.user_data['first_name'],
                 'lastName': context.user_data['last_name'],
+                'department': context.user_data.get('department', 'штат'),
                 'position': context.user_data['position'],
                 'secretCode': secret_code
             }
@@ -252,6 +298,7 @@ def main() -> None:
         states={
             FIRST_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, first_name)],
             LAST_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, last_name)],
+            DEPARTMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, department)],
             POSITION: [MessageHandler(filters.TEXT & ~filters.COMMAND, position)],
             SECRET: [MessageHandler(filters.TEXT & ~filters.COMMAND, secret)],
         },

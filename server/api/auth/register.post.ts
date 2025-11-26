@@ -3,7 +3,7 @@ import prisma from '../../utils/prisma'
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody(event)
-    const { telegramId, firstName, lastName, position, secretCode } = body
+    const { telegramId, firstName, lastName, department, position, secretCode } = body
     
     // Проверка секретного кода (хардкод в коде)
     const SECRET_REGISTRATION_CODE = '1517'
@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
         telegramId: String(telegramId),
         firstName,
         lastName,
+        department: department || 'штат',
         position,
         isAdmin: false
       }

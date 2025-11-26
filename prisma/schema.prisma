@@ -16,6 +16,7 @@ model User {
   firstName String
   lastName  String
   position  String
+  department String @default("штат") // "кухня" или "штат"
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

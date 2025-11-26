@@ -73,6 +73,9 @@
       <button class="btn btn-primary" @click="confirmSchedule" :disabled="loading">
         <span>{{ loading ? 'Обработка...' : 'Подтвердить и отправить' }}</span>
       </button>
+      <button class="btn btn-secondary" @click="duplicateWeek" :disabled="loading">
+        <span>{{ loading ? 'Копирование...' : 'Дублировать с прошлой недели' }}</span>
+      </button>
       <button class="btn btn-secondary" @click="exportSchedule" :disabled="loading">
         <span>Экспорт в XLS</span>
       </button>
@@ -148,6 +151,7 @@ interface User {
   firstName: string
   lastName: string
   position: string
+  department?: string
 }
 
 interface Schedule {
@@ -347,6 +351,43 @@ async function exportSchedule() {
   } catch (error) {
     console.error('Error exporting schedule:', error)
     alert('Ошибка при экспорте расписания')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function duplicateWeek() {
+  if (!confirm('Скопировать расписание с прошлой недели на текущую?')) {
+    return
+  }
+  
+  try {
+    loading.value = true
+    
+    // Вычисляем предыдущую неделю
+    const currentStart = new Date(props.weekStart)
+    const previousStart = new Date(currentStart)
+    previousStart.setDate(currentStart.getDate() - 7)
+    
+    const previousEnd = new Date(previousStart)
+    previousEnd.setDate(previousStart.getDate() + 6)
+    
+    // Копируем расписание
+    await $fetch('/api/schedules/duplicate', {
+      method: 'POST',
+      body: {
+        fromWeekStart: previousStart.toISOString(),
+        fromWeekEnd: previousEnd.toISOString(),
+        toWeekStart: props.weekStart.toISOString(),
+        toWeekEnd: props.weekEnd.toISOString()
+      }
+    })
+    
+    emit('refresh')
+    alert('Расписание успешно скопировано с прошлой недели!')
+  } catch (error: any) {
+    console.error('Error duplicating schedule:', error)
+    alert(error.data?.statusMessage || 'Ошибка при копировании расписания')
   } finally {
     loading.value = false
   }
